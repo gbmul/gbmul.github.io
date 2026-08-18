@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>GBmul — purge cache</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 36rem;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      line-height: 1.45;
+      color: #e8e8f0;
+      background: #12121a;
+    }
+    code { background: #2a2a3a; padding: 0.1em 0.35em; border-radius: 3px; }
+    #log { white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 0.85rem;
+           background: #1a1a28; padding: 0.75rem; border-radius: 6px; margin-top: 1rem; }
+    a { color: #8af; }
+  </style>
+</head>
+<body>
+  <h1>Purging GBmul cache…</h1>
+  <p>
+    This page unregisters every service worker for this origin and deletes
+    Cache Storage, then sends you back to the app.
+  </p>
+  <p>Bookmark for next time: <code>…/purge.html</code></p>
+  <div id="log">working…</div>
+  <script>
+    (async function () {
+      var log = document.getElementById("log");
+      var lines = [];
+      function say(m) { lines.push(m); log.textContent = lines.join("\n"); }
+
+      try {
+        if ("serviceWorker" in navigator) {
+          var regs = await navigator.serviceWorker.getRegistrations();
+          say("service workers: " + regs.length);
+          for (var i = 0; i < regs.length; i++) {
+            var ok = await regs[i].unregister();
+            say("  unregister " + (regs[i].scope || "?") + " → " + ok);
+          }
+        } else {
+          say("no serviceWorker API");
+        }
+      } catch (e) {
+        say("SW error: " + e);
+      }
+
+      try {
+        var keys = await caches.keys();
+        say("caches: " + (keys.length ? keys.join(", ") : "(none)"));
+        await Promise.all(keys.map(function (k) { return caches.delete(k); }));
+        say("caches deleted");
+      } catch (e) {
+        say("cache error: " + e);
+      }
+
+      // Keep SW off on local/LAN until explicitly re-enabled with ?sw=1
+      try {
+        var host = location.hostname;
+        var isLocal =
+          host === "localhost" || host === "127.0.0.1" || host === "[::1]" ||
+          /^192\.168\./.test(host) || /^10\./.test(host) ||
+          /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+        if (isLocal) {
+          localStorage.removeItem("gbmul_use_sw");
+          localStorage.setItem("gbmul_nosw", "1");
+          say("local/dev: SW disabled (use ?sw=1 to re-enable)");
+        }
+      } catch (_) {}
+
+      say("redirecting in 600ms…");
+      setTimeout(function () {
+        location.replace("./?_=" + Date.now());
+      }, 600);
+    })();
+  </script>
+</body>
+</html>

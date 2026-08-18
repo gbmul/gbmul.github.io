@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GBmul – Game Boy Emulator</title>
+
+  <!-- PWA manifest -->
+  <link rel="manifest" href="manifest.json" />
+
+  <!-- iOS "Add to Home Screen" support -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="GBmul" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+
+  <!-- Theme colour for the browser chrome on Android -->
+  <meta name="theme-color" content="#1a1a2e" />
+
+  <link rel="stylesheet" href="style.css?v=99" />
+  <!-- Static build marker (View Source): if this is not 358, HTML itself is stale. -->
+  <meta name="gbmul-ui" content="359" />
+  <!-- davidshimjs QRCode (vendored from belsafe.github.io) — global QRCode -->
+  <script src="qrcode-lib.js"></script>
+  <!--
+    Cache escape hatches (dev):
+      /purge.html  → always works (standalone page; bookmark this)
+      ?purge=1     → unregister SW + wipe Cache Storage + reload
+      ?nosw=1      → disable SW for this origin
+      ?sw=1        → force-enable SW (PWA testing)
+    Console:  __gbmulPurgeCache()
+    Footer:   Alt+click the version stamp
+    Local/LAN: service worker OFF by default (no more sticky ui stamps).
+  -->
+  <script>
+    (function () {
+      var params = new URLSearchParams(location.search);
+      var host = location.hostname;
+      var isLocal =
+        host === "localhost" ||
+        host === "127.0.0.1" ||
+        host === "[::1]" ||
+        /^192\.168\./.test(host) ||
+        /^10\./.test(host) ||
+        /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+
+      function stripParamAndReload(name) {
+        params.delete(name);
+        var q = params.toString();
+        location.replace(location.pathname + (q ? "?" + q : "") + location.hash);
+      }
+
+      window.__gbmulPurgeCache = async function (opts) {
+        opts = opts || {};
+        var report = { unregistered: 0, caches: [] };
+        try {
+          if ("serviceWorker" in navigator) {
+            var regs = await navigator.serviceWorker.getRegistrations();
+            for (var i = 0; i < regs.length; i++) {
+              await regs[i].unregister();
+              report.unregistered++;
+            }
+          }
+        } catch (e) { report.swError = String(e); }
+        try {
+          var keys = await caches.keys();
+          report.caches = keys.slice();
+          await Promise.all(keys.map(function (k) { return caches.delete(k); }));
+        } catch (e) { report.cacheError = String(e); }
+        console.info("[gbmul] cache purged", report);
+        if (opts.reload !== false) {
+          // Bust any HTTP cache of index.html with a one-shot query.
+          var u = new URL(location.href);
+          u.searchParams.delete("purge");
+          u.searchParams.delete("resetcache");
+          u.searchParams.set("_", String(Date.now()));
+          location.replace(u.pathname + u.search + u.hash);
+        }
+        return report;
+      };
+
+      // One-shot URL escape hatch — works from any bookmark / phone share.
+      if (params.has("purge") || params.has("resetcache")) {
+        window.__gbmulPurgeCache({ reload: true });
+        return; // don't register SW on this pass
+      }
+
+      if (params.has("nosw")) {
+        try { localStorage.setItem("gbmul_nosw", "1"); } catch (_) {}
+        params.delete("nosw");
+        window.__gbmulPurgeCache({ reload: false }).then(function () {
+          stripParamAndReload("nosw");
+        });
+        return;
+      }
+      if (params.has("sw")) {
+        try {
+          localStorage.removeItem("gbmul_nosw");
+          localStorage.setItem("gbmul_use_sw", "1");
+        } catch (_) {}
+        params.delete("sw");
+        // fall through to register after cleaning the URL
+        var q2 = params.toString();
+        history.replaceState(null, "", location.pathname + (q2 ? "?" + q2 : "") + location.hash);
+      }
+
+      var nosw = false;
+      try { nosw = localStorage.getItem("gbmul_nosw") === "1"; } catch (_) {}
+      // Local/LAN dev: SW off by default (sticky SW is a constant pain while iterating).
+      // Opt in once with ?sw=1 (persists via localStorage.gbmul_use_sw).
+      if (isLocal) {
+        var optedIn = false;
+        try { optedIn = localStorage.getItem("gbmul_use_sw") === "1"; } catch (_) {}
+        if (!optedIn) nosw = true;
+      }
+
+      window.__gbmulSwEnabled = !nosw;
+
+      if (nosw) {
+        // Quietly drop any existing SW so reloads always hit the network.
+        if ("serviceWorker" in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            regs.forEach(function (r) { r.unregister(); });
+          });
+          caches.keys().then(function (keys) {
+            keys.forEach(function (k) { caches.delete(k); });
+          });
+        }
+        console.info(
+          "[gbmul] service worker OFF (local/dev). " +
+          "Enable: localStorage.gbmul_use_sw='1' then ?sw=1  |  Purge: ?purge=1 or __gbmulPurgeCache()"
+        );
+        return;
+      }
+
+      if (!("serviceWorker" in navigator)) return;
+
+      var SW_URL = "./sw.js?v=280";
+      navigator.serviceWorker
+        .register(SW_URL, { updateViaCache: "none" })
+        .then(function (reg) {
+          reg.update().catch(function () {});
+          if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
+          reg.addEventListener("updatefound", function () {
+            var nw = reg.installing;
+            if (!nw) return;
+            nw.addEventListener("statechange", function () {
+              if (nw.state === "installed" && navigator.serviceWorker.controller) {
+                nw.postMessage({ type: "SKIP_WAITING" });
+              }
+            });
+          });
+        })
+        .catch(function (err) {
+          console.warn("Service worker registration failed:", err);
+        });
+
+      var refreshing = false;
+      navigator.serviceWorker.addEventListener("controllerchange", function () {
+        if (refreshing) return;
+        refreshing = true;
+        location.reload();
+      });
+    })();
+  </script>
+</head>
+<body data-gbmul-ui="378">
+  <!-- Advanced menu (edge panel) — full settings / debug -->
+  <button id="btn-burger" aria-label="Advanced menu" title="Advanced menu">☰</button>
+  <aside id="key-panel" aria-label="Advanced menu" aria-hidden="true">
+    <section id="controls">
+      <button id="btn-palette"  title="Cycle palette">🎨</button>
+      <button id="btn-save"     title="Save state">💾</button>
+      <button id="btn-load-state" title="Load state">📂</button>
+      <button id="btn-reset"   title="Reset">🔄</button>
+      <button id="btn-pause"   title="Pause">⏸</button>
+      <a id="btn-stats" href="stats.html" target="_blank" title="View game stats">📊</a>
+    </section>
+
+    <details id="rom-manager">
+      <summary>🎮 ROMs</summary>
+      <ul id="rom-list"></ul>
+      <button id="btn-add-rom">+ Add ROM</button>
+    </details>
+
+    <details id="tc-layout">
+      <summary>🕹️ Touch controls layout</summary>
+      <div class="tc-layout-group">
+        <strong>D-pad</strong>
+        <label>Size <span id="tc-dpad-size-val">52</span>px
+          <input type="range" id="tc-dpad-size" min="28" max="72" step="2" value="52" />
+        </label>
+        <label>Bottom <span id="tc-dpad-bottom-val">20</span>px
+          <input type="range" id="tc-dpad-bottom" min="0" max="150" step="2" value="20" />
+        </label>
+        <label>Left <span id="tc-dpad-left-val">12</span>px
+          <input type="range" id="tc-dpad-left" min="0" max="150" step="2" value="12" />
+        </label>
+      </div>
+      <div class="tc-layout-group">
+        <strong>A / B</strong>
+        <label>Size <span id="tc-ab-size-val">68</span>px
+          <input type="range" id="tc-ab-size" min="28" max="80" step="2" value="68" />
+        </label>
+        <label>Angle B <span id="tc-ab-angle-val">29</span>°
+          <input type="range" id="tc-ab-angle" min="0" max="45" step="1" value="29" />
+        </label>
+        <label>Spacing <span id="tc-ab-gap-val">21</span>px
+          <input type="range" id="tc-ab-gap" min="0" max="40" step="1" value="21" />
+        </label>
+        <label>Bottom <span id="tc-ab-bottom-val">82</span>px
+          <input type="range" id="tc-ab-bottom" min="0" max="150" step="2" value="82" />
+        </label>
+        <label>Right <span id="tc-ab-right-val">12</span>px
+          <input type="range" id="tc-ab-right" min="0" max="150" step="2" value="12" />
+        </label>
+      </div>
+      <div class="tc-layout-group">
+        <strong>Select / Start</strong>
+        <label>Bottom <span id="tc-mid-bottom-val">0</span>px
+          <input type="range" id="tc-mid-bottom" min="0" max="150" step="2" value="0" />
+        </label>
+        <label>Right <span id="tc-mid-right-val">174</span>px
+          <input type="range" id="tc-mid-right" min="0" max="250" step="2" value="174" />
+        </label>
+      </div>
+    </details>
+
+    <details id="display-settings">
+      <summary>🖥️ Display</summary>
+
+      <label id="screen-top-label">
+        Screen position <span id="screen-top-value">-112</span>px
+        <input id="screen-top-slider" type="range" min="-200" max="200" step="4" value="-112" />
+      </label>
+
+      <label id="zoom-label">
+        Zoom <span id="zoom-value">2×</span>
+        <input id="zoom-slider" type="range" min="1" max="8" step="1" value="2" />
+      </label>
+
+      <label id="shader-label">
+        Shader passes <span id="shader-value">4</span>
+        <input id="shader-slider" type="range" min="0" max="4" step="1" value="4" />
+      </label>
+
+      <div id="gray-levels">
+        <label>█ <span id="gl-val-0">255</span><input type="range" id="gl-0" min="0" max="255" step="1" value="255" /></label>
+        <label>▓ <span id="gl-val-1">143</span><input type="range" id="gl-1" min="0" max="255" step="1" value="143" /></label>
+        <label>▒ <span id="gl-val-2">111</span><input type="range" id="gl-2" min="0" max="255" step="1" value="111" /></label>
+        <label>░ <span id="gl-val-3">47</span><input type="range" id="gl-3" min="0" max="255" step="1" value="47" /></label>
+        <button id="gray-levels-reset" title="Reset to defaults">↺</button>
+      </div>
+
+      <label id="brightness-label">
+        Brightness <span id="brightness-value">1.50</span>
+        <input id="brightness-slider" type="range" min="0.2" max="2.0" step="0.01" value="1.50" />
+      </label>
+
+      <label id="shadow-offset-label">
+        Shadow distance <span id="shadow-offset-value">1.5</span>
+        <input id="shadow-offset-slider" type="range" min="0" max="3.0" step="0.1" value="1.5" />
+      </label>
+
+      <label id="shadow-opacity-label">
+        Shadow darkness <span id="shadow-opacity-value">3.0</span>
+        <input id="shadow-opacity-slider" type="range" min="0" max="8.0" step="0.1" value="3.0" />
+      </label>
+
+      <label id="shadow-sharpness-label">
+        Shadow softness <span id="shadow-sharpness-value">1.0</span>
+        <input id="shadow-sharpness-slider" type="range" min="0.1" max="3.0" step="0.1" value="1.0" />
+      </label>
+
+      <label id="theme-label">
+        Theme
+        <select id="theme-select">
+          <option value="auto" selected>Auto</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
+
+      <label id="panel-opacity-label">
+        Advanced menu opacity <span id="panel-opacity-value">75%</span>
+        <input id="panel-opacity-slider" type="range" min="20" max="100" step="5" value="75" />
+      </label>
+
+      <label id="fps-label">
+        <input type="checkbox" id="fps-check" /> Show FPS counter
+      </label>
+
+      <label id="show-bot-screen-label">
+        <input type="checkbox" id="show-bot-screen-check" /> Show opponent screen
+      </label>
+
+      <label id="input-mode-label">
+        Input mode
+        <select id="input-mode-select">
+          <option value="auto">Auto</option>
+          <option value="desktop">Desktop</option>
+          <option value="smartphone">Smartphone</option>
+        </select>
+      </label>
+
+    </details>
+
+    <details id="misc-settings">
+      <summary>⚙️ Misc</summary>
+
+      <label id="sound-label">
+        <input type="checkbox" id="sound-check" checked /> 🔊 Sound
+        <input id="volume-slider" type="range" min="0" max="100" step="1" value="50" />
+        <span id="volume-value">50%</span>
+      </label>
+
+      <label id="restore-label">
+        <input type="checkbox" id="restore-check" checked /> Restore state on reload
+      </label>
+
+      <label id="clear-sram-label">
+        <input type="checkbox" id="clear-sram-check" /> Clear SRAM on next load
+      </label>
+
+      <label id="auto-menu-nav-label">
+        <input type="checkbox" id="auto-menu-nav-check" /> Auto-advance menus
+        <span id="auto-menu-setup-pickers">
+          T:<select id="auto-menu-type-select" aria-label="Game type"><option value="A">A</option><option value="B">B</option></select>
+          L:<select id="auto-menu-level-select" aria-label="Start level">
+            <option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option>
+            <option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option>
+          </select>
+          H:<select id="auto-menu-high-select" aria-label="Start height">
+            <option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option>
+          </select>
+        </span>
+      </label>
+
+      <label id="dual-label">
+        <input type="checkbox" id="dual-check" /> 🔗 2-Player (link cable)
+      </label>
+
+      <details id="webgblink-panel">
+        <summary>🌐 WebGBLink</summary>
+
+        <!-- Idle: host or join -->
+        <div id="wgl-idle">
+          <button id="wgl-host-btn">Host a game</button>
+          <span class="wgl-or">— or —</span>
+          <div class="wgl-join-row">
+            <input id="wgl-room-input" type="text" placeholder="Room code" maxlength="6" spellcheck="false" autocomplete="off" />
+            <button id="wgl-join-btn">Join</button>
+          </div>
+        </div>
+
+        <!-- Hosting: waiting for guest to connect -->
+        <div id="wgl-hosting" hidden>
+          <div class="wgl-room-row">
+            Room: <strong id="wgl-room-code">——</strong>
+            <button id="wgl-copy-btn" title="Copy join link">Copy link</button>
+            <button id="wgl-qr-btn" title="Show QR code for guest">QR</button>
+          </div>
+          <div id="wgl-qr-inline" class="wgl-qr-inline" aria-hidden="true"></div>
+          <p id="wgl-share-hint" class="wgl-share-hint" hidden></p>
+          <div class="wgl-status-row">
+            <span class="wgl-dot wgl-dot-waiting"></span>
+            <span>Waiting for guest…</span>
+          </div>
+          <button id="wgl-cancel-btn">Cancel</button>
+        </div>
+
+        <!-- Connected (host or guest) -->
+        <div id="wgl-connected" hidden>
+          <div class="wgl-room-row">
+            Room: <strong id="wgl-room-code-c">——</strong>
+            <button id="wgl-copy-btn-c" title="Copy join link">Copy link</button>
+          </div>
+          <div class="wgl-status-row">
+            <span class="wgl-dot wgl-dot-live"></span>
+            <span>Connected</span>
+            <span id="wgl-ping" class="wgl-ping"></span>
+          </div>
+          <button id="wgl-disconnect-btn">Disconnect</button>
+        </div>
+
+        <!-- ROM transfer progress (guest only) -->
+        <div id="wgl-transfer" hidden>
+          <progress id="wgl-transfer-bar" value="0" max="1"></progress>
+          <span id="wgl-transfer-label">Receiving ROM…</span>
+        </div>
+      </details>
+    </details>
+
+    <details id="bot-settings">
+      <summary>🤖 Bot</summary>
+
+      <label id="bot-label">
+        <input type="checkbox" id="bot-check" /> Bot (auto-play)
+      </label>
+
+      <label id="bot-strategy-label">
+        Strategy
+        <select id="bot-strategy-select">
+          <option value="hybrid" selected>Hybrid</option>
+          <option value="intermediate">Intermediate</option>
+          <option value="meatfighter">Meatfighter</option>
+        </select>
+      </label>
+
+      <div id="bot-pps-row">
+        <span id="bot-pps-label-text">PPS</span>
+        <span id="bot-pps-display">1.0</span>
+        <input id="bot-pps-slider" type="range" min="0" max="101" step="1" value="41" />
+        <input id="bot-pps-input" type="number" min="0" step="0.1" placeholder="1.0" value="1.0" />
+      </div>
+
+      <label id="dynamic-bot-speed-label"
+             title="Vs bot (2P): start at 1.0 PPS; +0.1 when you win (harder), −0.1 when you lose (easier). Adjusts every round or only when the first-to-4 match ends. On by default for new players.">
+        <input type="checkbox" id="dynamic-bot-speed-check" checked /> Dynamic Bot speed
+        <span id="dynamic-bot-pps-hint" class="bot-settings-hint">
+          (<span id="dynamic-bot-pps-display">1.0</span> PPS)
+        </span>
+      </label>
+      <label id="dynamic-bot-mode-label" class="bot-settings-subrow">
+        Adjust on
+        <select id="dynamic-bot-mode-select" aria-label="Dynamic PPS adjustment mode">
+          <option value="per-round" selected>Each round</option>
+          <option value="first-to-4">First to 4 (match)</option>
+        </select>
+      </label>
+
+      <label id="misdrop-reset-label">
+        <input type="checkbox" id="misdrop-reset-check" /> Reset on misdrop
+      </label>
+
+      <label id="misdrop-alert-label" title="Play an alert sound when a misdrop is saved (works even if game sound is off)">
+        <input type="checkbox" id="misdrop-alert-check" /> Alert sound on misdrop
+      </label>
+
+      <div id="bot-info" data-active="false">
+        <div class="bot-info-row" id="bot-info-mode-row">
+          <span class="bot-info-label">Mode:</span>
+          <span class="bot-info-value" id="bot-info-mode">—</span>
+        </div>
+        <div class="bot-info-row" id="bot-info-action-row">
+          <span class="bot-info-label">Action:</span>
+          <span class="bot-info-value" id="bot-info-action">—</span>
+        </div>
+        <div class="bot-info-row" id="bot-info-path-row">
+          <span class="bot-info-label">Path:</span>
+          <span class="bot-info-value bot-info-value-path" id="bot-info-path">
+            <span id="bot-info-path-text">—</span>
+            <span id="bot-info-landing-badge" class="misdrop-type" hidden></span>
+          </span>
+        </div>
+        <div class="bot-info-row" id="bot-info-misdrops-row">
+          <span class="bot-info-label">Misdrops:</span>
+          <span class="bot-info-value" id="bot-info-misdrops">—</span>
+        </div>
+      </div>
+
+      <details id="misdrop-replays-panel">
+        <summary>Misdrop replays <span id="misdrop-replay-count">(0)</span></summary>
+        <div id="misdrop-replay-list"></div>
+        <div style="text-align:right;margin-top:2px">
+          <button id="misdrop-clear-all" title="Clear all misdrop replays">clear</button>
+        </div>
+      </details>
+    </details>
+
+    <div id="game-state-badge" data-state="loading" aria-live="polite">
+      <span id="game-state-dot"></span>
+      <span id="game-state-label">Loading…</span>
+    </div>
+
+    <details id="tetris-state" open>
+      <summary>Board state</summary>
+      <div id="ts-stats">
+        <div class="ts-stat"><span class="ts-label">Score</span><span id="ts-score">–</span></div>
+        <div class="ts-stat"><span class="ts-label">Level</span><span id="ts-level">–</span></div>
+        <div class="ts-stat"><span class="ts-label">Lines</span><span id="ts-lines">–</span></div>
+      </div>
+      <div id="ts-pieces">
+        <div class="ts-piece-box">
+          <div class="ts-piece-label">Current</div>
+          <canvas id="ts-cur-canvas" width="40" height="40"></canvas>
+        </div>
+        <div class="ts-piece-box">
+          <div class="ts-piece-label">Next</div>
+          <canvas id="ts-next-canvas" width="40" height="40"></canvas>
+        </div>
+      </div>
+      <div id="ts-board-wrap">
+        <canvas id="ts-board" width="100" height="180"></canvas>
+      </div>
+    </details>
+
+    <details id="mem-inspector">
+      <summary>Memory inspector</summary>
+      <table id="mem-watch-table">
+        <thead><tr><th>Address</th><th>Hex</th><th>Dec</th></tr></thead>
+        <tbody id="mem-watch-body">
+          <!-- rows injected by JS -->
+        </tbody>
+      </table>
+      <p class="mem-inspector-hint">Values update every second. Edit <code>MEM_WATCH</code> in <code>index.js</code> to add addresses.</p>
+    </details>
+
+    <details id="keyboard-settings">
+      <summary>⌨️ Keyboard</summary>
+      <p class="kb-hint">Click a key, then press the new key. Esc is reserved for menus.</p>
+      <table id="kb-map-table" aria-label="Keyboard mapping">
+        <thead><tr><th>Action</th><th>Key</th></tr></thead>
+        <tbody id="kb-map-body">
+          <!-- filled by index.js -->
+        </tbody>
+      </table>
+      <p class="kb-fixed-hint">Esc · In-device menu &nbsp;·&nbsp; Esc Esc · Advanced menu</p>
+      <button type="button" id="kb-reset-btn" class="kb-reset-btn">Reset to defaults</button>
+    </details>
+
+    <footer id="app-version" class="app-version" title="Alt+click to purge service worker + caches. Or open ?purge=1">
+      <span class="app-version-name">GBmul</span>
+      <span id="app-version-text" class="app-version-text">…</span>
+    </footer>
+  </aside>
+
+  <div id="app">
+    <div id="dual-wrap">
+      <div id="screen-main-col">
+        <div id="screen-wrap">
+          <canvas id="screen" width="160" height="144"></canvas>
+          <canvas id="screen-gl" width="160" height="144" aria-hidden="true"></canvas>
+          <canvas id="fps-overlay" width="90" height="44" aria-hidden="true"></canvas>
+          <div id="wgl-net-dot" hidden aria-hidden="true"></div>
+          <!-- In-device menu (SDL-style overlay on the GB screen) -->
+          <div id="idm" class="idm" hidden aria-hidden="true">
+            <div class="idm-dim" aria-hidden="true"></div>
+            <div class="idm-panel" role="menu" aria-label="In-device menu">
+              <div id="idm-about" class="idm-about" hidden>
+                <div class="idm-about-line">gbmul</div>
+                <div class="idm-about-line idm-muted">build</div>
+                <div id="idm-build" class="idm-about-line">—</div>
+              </div>
+              <ul id="idm-list" class="idm-list"></ul>
+            </div>
+          </div>
+        </div>
+        <!-- Touch-friendly Esc substitute: toggle in-device menu -->
+        <button type="button" id="idm-trigger" class="idm-trigger" aria-label="In-device menu" title="In-device menu">GBmul</button>
+      </div>
+      <div id="screen-wrap-bot">
+        <canvas id="screen-bot" width="160" height="144"></canvas>
+        <canvas id="screen-gl-bot" width="160" height="144" aria-hidden="true"></canvas>
+      </div>
+    </div>
+    <p id="status">Loading…</p>
+  </div>
+
+  <!-- WebGBLink share QR (full-screen, scannable side-by-side) -->
+  <div id="wgl-qr-overlay" class="wgl-qr-overlay" hidden aria-hidden="true">
+    <div class="wgl-qr-card" role="dialog" aria-labelledby="wgl-qr-title">
+      <h2 id="wgl-qr-title" class="wgl-qr-title">Scan to join</h2>
+      <p class="wgl-qr-room">Room <strong id="wgl-qr-room">——</strong></p>
+      <div id="wgl-qr-box" class="wgl-qr-box"></div>
+      <p id="wgl-qr-url" class="wgl-qr-url"></p>
+      <div class="wgl-qr-actions">
+        <button type="button" id="wgl-qr-copy">Copy link</button>
+        <button type="button" id="wgl-qr-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- WebGBLink join (room code) — used from in-device menu -->
+  <div id="wgl-join-overlay" class="wgl-qr-overlay" hidden aria-hidden="true">
+    <div class="wgl-qr-card wgl-join-card" role="dialog" aria-labelledby="wgl-join-title">
+      <h2 id="wgl-join-title" class="wgl-qr-title">Join room</h2>
+      <input id="wgl-join-input" class="wgl-join-input" type="text" maxlength="6"
+             placeholder="ROOM" spellcheck="false" autocomplete="off" autocapitalize="characters" />
+      <div class="wgl-qr-actions">
+        <button type="button" id="wgl-join-go">Join</button>
+        <button type="button" id="wgl-join-close">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Touch controls (smartphone mode) -->
+  <div id="touch-controls" aria-label="Game Boy controls">
+    <div id="tc-dpad">
+      <div class="tc-dpad-btn" id="tc-up"    data-btn="4" aria-label="Up">▲</div>
+      <div class="tc-dpad-btn" id="tc-left"  data-btn="6" aria-label="Left">◀</div>
+      <div class="tc-dpad-center" aria-hidden="true"></div>
+      <div class="tc-dpad-btn" id="tc-right" data-btn="7" aria-label="Right">▶</div>
+      <div class="tc-dpad-btn" id="tc-down"  data-btn="5" aria-label="Down">▼</div>
+    </div>
+    <div id="tc-mid">
+      <div class="tc-sys-btn" data-btn="2" aria-label="Select">SELECT</div>
+      <div class="tc-sys-btn" data-btn="3" aria-label="Start">START</div>
+    </div>
+    <div id="tc-ab">
+      <button class="tc-ab-btn" id="tc-b" data-btn="1" aria-label="B">B</button>
+      <button class="tc-ab-btn" id="tc-a" data-btn="0" aria-label="A">A</button>
+    </div>
+  </div>
+
+  <!--
+    ROM splash visuals are painted into the 160×144 frame (cart art + captions)
+    and fed through the DMG shader. This overlay is an invisible hit-target for
+    drop / browse; WGL guest status is also mirrored here for a11y.
+  -->
+  <div id="rom-overlay" class="hidden" aria-label="Load a Game Boy ROM">
+    <div id="rom-dropzone" role="button" tabindex="0"
+         title="Open cart (click / Start / Select), then pick a ROM — or drop a file">
+      <p id="rom-wgl-status" class="rom-wgl-status" hidden aria-live="polite"></p>
+      <button type="button" id="btn-browse-rom">Open cart / choose ROM…</button>
+      <input type="file" id="rom-file-input" accept=".gb,.gbc,.rom" hidden />
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="texture.js"></script>
+  <script type="module" src="index.js?v=379"></script>
+</body>
+</html>
+
+

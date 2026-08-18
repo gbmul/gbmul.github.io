@@ -1,0 +1,2082 @@
+/* ── Cuterminus (6×8 bitmap UI font for menus) ────────────────────────────── */
+@font-face {
+  font-family: "Cuterminus";
+  src: url("fonts/cuterminus.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+
+/* ── CSS variables (themes) ───────────────────────────────────────────────── */
+:root {
+  --bg:          #dbdde0;
+  --surface:     #ffffff;
+  --surface2:    #e8e8f0;
+  --border:      #c8c8d8;
+  --text:        #1a1a2e;
+  --text-muted:  #606080;
+  --accent:      #2a7a2a;
+  --btn-bg:      #e0e0ec;
+  --btn-hover:   #cacadc;
+  --canvas-border: #aaaacc;
+  --panel-shadow: rgba(0,0,0,0.15);
+  --shadow-str: 0.17;
+  --sh-off: 3px;
+  --sh-blur: 6px;
+}
+
+[data-theme="dark"] {
+  --bg:          #1a1a2e;
+  --surface:     #2a2a4e;
+  --surface2:    #22223c;
+  --border:      #4a4a6a;
+  --text:        #e0e0e0;
+  --text-muted:  #9a9ab0;
+  --accent:      #9eff9e;
+  --btn-bg:      #2a2a4e;
+  --btn-hover:   #3a3a6e;
+  --canvas-border: #4a4a6a;
+  --panel-shadow: rgba(0,0,0,0.4);
+}
+
+/* ── reset ───────────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+}
+
+/* ── base ────────────────────────────────────────────────────────────────── */
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, sans-serif;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  transition: background 0.2s, color 0.2s;
+}
+
+#app {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+/* ── burger button ───────────────────────────────────────────────────────── */
+#btn-burger {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 200;
+  padding: 6px 10px;
+  font-family: "Cuterminus", ui-monospace, monospace;
+  font-size: 16px; /* 2× the 8px cell height */
+  font-weight: normal; /* Cuterminus has no bold face — avoid synthetic bold */
+  line-height: 1;
+  background: var(--btn-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 1;
+  transition: opacity 0.5s ease;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+  font-smooth: never;
+}
+#btn-burger:hover { background: var(--btn-hover); }
+#btn-burger.burger-hidden { opacity: 0; pointer-events: none; }
+
+/* ── advanced menu (edge panel) ──────────────────────────────────────────── */
+#key-panel {
+  position: fixed;
+  top: 52px;
+  right: 12px;
+  z-index: 100;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  box-shadow: 0 4px 16px var(--panel-shadow);
+  font-family: "Cuterminus", ui-monospace, monospace;
+  font-size: 16px; /* 2× the 8px cell — keeps bitmap glyphs crisp */
+  font-weight: normal; /* Cuterminus has no bold face — avoid synthetic bold */
+  line-height: 1.35;
+  display: none;
+  min-width: 220px;
+  max-width: min(360px, calc(100vw - 24px));
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  opacity: var(--panel-opacity, 0.75);
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+  font-smooth: never;
+}
+#key-panel.open { display: flex; flex-direction: column; gap: 10px; }
+
+/* Form controls often ignore parent font-family */
+#key-panel button,
+#key-panel select,
+#key-panel input,
+#key-panel summary,
+#key-panel label,
+#key-panel a {
+  font-family: inherit;
+}
+
+/* Cuterminus is single-weight: kill bold (summary/strong/values) so the browser
+   never synthesizes a faux-bold that blurs the 6×8 glyphs. */
+#key-panel,
+#key-panel * {
+  font-weight: normal !important;
+}
+
+#key-panel strong {
+  color: var(--text);
+}
+
+#key-panel table {
+  border-collapse: collapse;
+}
+
+.app-version {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 8px; /* 1× native cell size for dense footer */
+  line-height: 1.5;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-weight: normal;
+  user-select: text;
+  word-break: break-all;
+}
+.app-version-name {
+  font-weight: normal;
+  color: var(--text);
+  margin-right: 0.4em;
+  font-family: inherit;
+}
+.app-version-text {
+  opacity: 0.9;
+}
+
+#key-panel th,
+#key-panel td {
+  border: 1px solid var(--border);
+  padding: 3px 10px;
+  text-align: left;
+}
+
+#key-panel th {
+  background: var(--surface2);
+}
+
+/* ── layout ──────────────────────────────────────────────────────────────── */
+#app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  margin-top: var(--screen-top, -112px);
+}
+
+#dual-wrap {
+  display: flex;
+  align-items: flex-start; /* top lines of both screens stay aligned */
+  /* gap set dynamically by applyScale() = botWidth / 10 */
+}
+
+/* Main screen + “GBmul” in-device menu trigger under its lower-left corner */
+#screen-main-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 0 0 auto;
+}
+
+#screen-wrap,
+#screen-wrap-bot {
+  position: relative;
+  overflow: hidden;
+  display: block;
+  line-height: 0;
+  background: #e0e0e0;
+}
+
+/* In-device menu open control (phone-friendly Esc substitute).
+   Normal weight + light skew (gentler than true italic) — DMG purple-blue. */
+.idm-trigger {
+  display: block;
+  position: relative;
+  /* Above #rom-overlay (300) so "GBmul" opens the menu during the ROM splash. */
+  z-index: 310;
+  margin: 20px 0 0 2px;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: rgb(31, 35, 142);
+  font-family: Arial, Helvetica, sans-serif;
+  font-style: normal;
+  font-weight: bold;
+  font-size: 1.275rem; /* 0.85rem × 1.5 */
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  text-shadow: none;
+  transform: skewX(-9deg);
+  transform-origin: left center;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.idm-trigger:hover,
+.idm-trigger:focus,
+.idm-trigger:active,
+.idm-trigger:visited {
+  color: rgb(31, 35, 142);
+  text-decoration: none;
+  outline: none;
+  background: none;
+  text-shadow: none;
+}
+
+#screen-wrap-bot { display: none; }
+#dual-wrap.dual.show-bot-screen #screen-wrap-bot { display: block; }
+
+#screen-wrap::after,
+#screen-wrap-bot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: 2;
+  box-shadow:
+    inset 0  var(--sh-off) var(--sh-blur) rgba(0,0,0,var(--shadow-str)),
+    inset var(--sh-off) 0  var(--sh-blur) rgba(0,0,0,var(--shadow-str)),
+    inset calc(var(--sh-off) * -0.67) 0 calc(var(--sh-blur) * 0.67) rgba(0,0,0,calc(var(--shadow-str) * 0.32)),
+    inset 0 calc(var(--sh-off) * -0.67) calc(var(--sh-blur) * 0.5)  rgba(0,0,0,calc(var(--shadow-str) * 0.09));
+  pointer-events: none;
+}
+
+canvas#screen,
+canvas#screen-bot {
+  image-rendering: pixelated;
+  display: block;
+}
+
+canvas#screen-gl {
+  display: none;
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  image-rendering: pixelated;
+  z-index: 1;
+  background: #005aaa;
+}
+canvas#screen-gl.shader-active { display: block; }
+#screen-wrap:has(canvas#screen-gl.shader-active) canvas#screen { visibility: hidden; }
+
+canvas#screen-gl-bot {
+  display: none;
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  image-rendering: pixelated;
+  z-index: 1;
+  background: #005aaa;
+}
+canvas#screen-gl-bot.shader-active { display: block; }
+#screen-wrap-bot:has(canvas#screen-gl-bot.shader-active) canvas#screen-bot { visibility: hidden; }
+
+/* ── controls (inside panel) ─────────────────────────────────────────────── */
+#controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+button {
+  background: var(--btn-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 6px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.15s;
+}
+
+#controls button {
+  padding: 6px 10px;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+button:hover { background: var(--btn-hover); }
+
+#btn-pause.paused {
+  background: #c0392b;
+  color: #fff;
+  border-color: #922b21;
+}
+#btn-pause.paused:hover {
+  background: #a93226;
+}
+
+/* ── zoom label ──────────────────────────────────────────────────────────── */
+#zoom-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--text);
+  user-select: none;
+}
+
+#zoom-value {
+  font-weight: 600;
+  min-width: 3ch;
+  text-align: right;
+}
+
+#zoom-slider {
+  width: 120px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* ── shader passes slider ────────────────────────────────────────────────── */
+#shader-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--text);
+  user-select: none;
+}
+
+#shader-value {
+  font-weight: 600;
+  min-width: 1ch;
+  text-align: right;
+}
+
+#shader-slider {
+  width: 120px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* ── sound label ─────────────────────────────────────────────────────────── */
+#sound-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--text);
+  user-select: none;
+}
+
+#volume-slider {
+  width: 90px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+#volume-value {
+  font-weight: 600;
+  min-width: 3ch;
+  text-align: right;
+}
+
+/* ── theme label ─────────────────────────────────────────────────────────── */
+#theme-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+#theme-select {
+  background: var(--btn-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+/* ── FPS overlay ─────────────────────────────────────────────────────────── */
+#fps-overlay {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  width: 90px;
+  height: 44px;
+  border-radius: 4px;
+  pointer-events: none;
+  display: none;
+  z-index: 10;
+  image-rendering: pixelated;
+}
+#fps-overlay.visible { display: block; }
+
+#fps-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+#fps-label input { cursor: pointer; }
+
+/* ── bot settings panel ──────────────────────────────────────────────────── */
+#bot-settings {
+  font-size: 0.82rem;
+  color: var(--text);
+}
+#bot-settings summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 2px 0;
+  user-select: none;
+  color: var(--text-muted);
+}
+#bot-settings summary:hover { color: var(--text); }
+#bot-settings > label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--text);
+  margin-bottom: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+#bot-settings > label input[type="checkbox"] { cursor: pointer; }
+#bot-settings > #bot-info {
+  margin-left: 0;
+  margin-bottom: 4px;
+}
+#bot-settings > #misdrop-replays-panel {
+  margin-top: 4px;
+  margin-bottom: 2px;
+}
+.bot-settings-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+#bot-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+#bot-label input { cursor: pointer; }
+
+/* ── bot type selector ───────────────────────────────────────────────────── */
+#bot-type-row {
+  display: flex;
+  align-items: center;
+  padding-left: 22px; /* indent under the bot checkbox */
+}
+#bot-type-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--text);
+  user-select: none;
+  opacity: 0.85;
+}
+#bot-type-label select {
+  background: var(--btn-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+/* ── bot PPS row ─────────────────────────────────────────────────────────── */
+#bot-pps-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--text);
+  user-select: none;
+  margin-bottom: 4px;
+}
+#bot-pps-label-text {
+  white-space: nowrap;
+  opacity: 0.75;
+}
+#bot-pps-display {
+  font-weight: 600;
+  min-width: 4ch;
+  text-align: right;
+}
+#bot-pps-slider {
+  width: 90px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+#bot-pps-input {
+  width: 7ch;
+  background: var(--btn-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 0.85rem;
+  text-align: center;
+  cursor: text;
+}
+#bot-info {
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  margin-left: 22px;
+  padding: 5px 8px;
+  border-left: 2px solid var(--border);
+}
+#bot-info[data-active="true"] {
+  display: flex;
+}
+.bot-info-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 0.8rem;
+}
+.bot-info-label {
+  min-width: 6ch;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+.bot-info-value {
+  font-weight: 600;
+  color: var(--text);
+}
+.bot-info-value-path {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.68rem;
+  font-weight: 500;
+  word-break: break-all;
+  line-height: 1.25;
+}
+#bot-info-landing-badge {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+}
+
+#misdrop-replays-panel {
+  margin-top: 6px;
+  font-size: 11px;
+}
+#misdrop-replay-list {
+  max-height: 240px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  margin: 4px 0;
+}
+.misdrop-row {
+  display: flex;
+  flex-direction: column;
+  padding: 2px 3px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  line-height: 1.1;
+}
+.misdrop-row:last-child {
+  border-bottom: none;
+}
+.misdrop-row-main {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.misdrop-detail {
+  font-family: monospace;
+  font-size: 9px;
+  opacity: 0.75;
+  padding-left: 2px;
+  word-break: break-all;
+}
+.misdrop-label {
+  flex: 1;
+  font-family: monospace;
+}
+.misdrop-type {
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  background: #555;
+  color: #ddd;
+  align-self: center;
+  text-transform: lowercase;
+}
+.misdrop-type.spin {
+  background: #2e7d32;
+  color: #fff;
+}
+.misdrop-type.tuck {
+  background: #1565c0;
+  color: #fff;
+}
+
+#misdrop-replays-panel #misdrop-clear-all {
+  font-size: 9px;
+  padding: 1px 4px;
+}
+.misdrop-row button {
+  font-size: 9px;
+  padding: 0 3px;
+  line-height: 1;
+  border-radius: 2px;
+}
+
+/* ── stats link (burger panel) ───────────────────────────────────────────── */
+#btn-stats {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  background: var(--btn-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  text-decoration: none;
+  font-size: 1.15rem;
+  line-height: 1;
+  transition: background 0.15s;
+}
+#btn-stats:hover { background: var(--btn-hover); }
+
+/* ── game state badge ────────────────────────────────────────────────────── */
+#game-state-badge {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 11px 3px 8px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  transition: color 0.35s, border-color 0.35s, background 0.35s;
+  user-select: none;
+}
+
+#game-state-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: background 0.35s;
+  flex-shrink: 0;
+}
+
+/* "loading" and unknown states fall through to the base badge style (muted) */
+#game-state-badge[data-state="splash"] {
+  color: #6080b0;
+  border-color: #6080b0;
+  background: color-mix(in srgb, #6080b0 8%, var(--surface));
+}
+#game-state-badge[data-state="splash"] #game-state-dot {
+  background: #6080b0;
+}
+
+#game-state-badge[data-state="title"] {
+  color: #7a50b0;
+  border-color: #7a50b0;
+  background: color-mix(in srgb, #7a50b0 8%, var(--surface));
+}
+#game-state-badge[data-state="title"] #game-state-dot {
+  background: #7a50b0;
+}
+
+#game-state-badge[data-state="submenu"],
+#game-state-badge[data-state="submenu-gametype"],
+#game-state-badge[data-state="submenu-level"] {
+  color: #b07020;
+  border-color: #b07020;
+  background: color-mix(in srgb, #b07020 8%, var(--surface));
+}
+#game-state-badge[data-state="submenu"] #game-state-dot,
+#game-state-badge[data-state="submenu-gametype"] #game-state-dot,
+#game-state-badge[data-state="submenu-level"] #game-state-dot {
+  background: #b07020;
+}
+
+#game-state-badge[data-state="paused"] {
+  color: #c06020;
+  border-color: #c06020;
+  background: color-mix(in srgb, #c06020 8%, var(--surface));
+}
+#game-state-badge[data-state="paused"] #game-state-dot {
+  background: #c06020;
+  animation: pulse 1s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+#game-state-badge[data-state="demo"] {
+  color: #4090a0;
+  border-color: #4090a0;
+  background: color-mix(in srgb, #4090a0 8%, var(--surface));
+}
+#game-state-badge[data-state="demo"] #game-state-dot {
+  background: #4090a0;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+#game-state-badge[data-state="in-game"] {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+#game-state-badge[data-state="in-game"] #game-state-dot {
+  background: var(--accent);
+}
+
+#game-state-badge[data-state="game-over"],
+#game-state-badge[data-state="2p-round-loss"],
+#game-state-badge[data-state="2p-match-loss"] {
+  color: #c02020;
+  border-color: #c02020;
+  background: color-mix(in srgb, #c02020 8%, var(--surface));
+}
+#game-state-badge[data-state="game-over"] #game-state-dot,
+#game-state-badge[data-state="2p-round-loss"] #game-state-dot,
+#game-state-badge[data-state="2p-match-loss"] #game-state-dot {
+  background: #c02020;
+}
+
+#game-state-badge[data-state="win"],
+#game-state-badge[data-state="2p-round-win"],
+#game-state-badge[data-state="2p-match-win"] {
+  color: #20a040;
+  border-color: #20a040;
+  background: color-mix(in srgb, #20a040 8%, var(--surface));
+}
+#game-state-badge[data-state="win"] #game-state-dot,
+#game-state-badge[data-state="2p-round-win"] #game-state-dot,
+#game-state-badge[data-state="2p-match-win"] #game-state-dot {
+  background: #20a040;
+}
+
+#dynamic-bot-mode-label {
+  padding-left: 22px;
+  opacity: 0.9;
+}
+#dynamic-bot-mode-label select {
+  background: var(--btn-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+/* ── tetris state panel ──────────────────────────────────────────────────── */
+#tetris-state {
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+#tetris-state summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 2px 0;
+  user-select: none;
+  color: var(--text-muted);
+}
+
+#tetris-state summary:hover { color: var(--text); }
+
+#ts-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin: 6px 0 8px;
+}
+
+.ts-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 2px;
+}
+
+.ts-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+#ts-stats span:last-child {
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+#ts-pieces {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  justify-content: center;
+}
+
+.ts-piece-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.ts-piece-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+#ts-cur-canvas, #ts-next-canvas {
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--surface2);
+  image-rendering: pixelated;
+}
+
+#ts-board-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+#ts-board {
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--surface2);
+  image-rendering: pixelated;
+}
+
+/* ── memory inspector ────────────────────────────────────────────────────── */
+#mem-inspector {
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+#mem-inspector summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 2px 0;
+  user-select: none;
+  color: var(--text-muted);
+}
+
+#mem-inspector summary:hover {
+  color: var(--text);
+}
+
+#mem-watch-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-top: 6px;
+}
+
+#mem-watch-table th,
+#mem-watch-table td {
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  text-align: left;
+  font-family: monospace;
+}
+
+#mem-watch-table th {
+  background: var(--surface2);
+}
+
+.mem-inspector-hint {
+  margin-top: 5px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.mem-inspector-hint code {
+  font-size: 0.9em;
+  background: var(--surface2);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+/* ── status ──────────────────────────────────────────────────────────────── */
+#status {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  /* Above ROM overlay (300) so WebGBLink diagnosis is visible on a fresh guest. */
+  z-index: 400;
+  max-width: min(96vw, 36rem);
+  padding: 6px 10px;
+  border-radius: 8px;
+  /* Opaque surface + primary text — muted grey-on-translucent was unreadable. */
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--text);
+  text-align: center;
+  word-break: break-word;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+/* Sit just above the fixed 200px touch-control strip (otherwise status is under the d-pad). */
+body.touch-mode #status {
+  bottom: calc(200px + env(safe-area-inset-bottom, 0px) + 6px);
+  max-width: min(94vw, 28rem);
+  font-size: 0.74rem;
+}
+/* ROM splash is full-screen: keep status at true bottom so it isn't mid-air. */
+body.touch-mode.rom-overlay-open #status,
+body.rom-overlay-open #status {
+  bottom: max(12px, env(safe-area-inset-bottom, 0px) + 10px);
+}
+#status.fade-out {
+  opacity: 0;
+}
+#status.sticky {
+  opacity: 1;
+}
+/* Light text on solid dark red — works in light + dark theme. */
+#status.error {
+  color: #fff5f5;
+  font-weight: 600;
+  opacity: 1;
+  border-color: #ff6b6b;
+  background: #6b1a1a;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+}
+/* Keep wgl sticky readable without clobbering .error (cascade used to force --text). */
+#status.wgl {
+  opacity: 1;
+}
+#status.wgl:not(.error) {
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+/* ── ROM import overlay ────────────────────────────────────────────────────
+   Visuals live on the GB canvas (cart art through the DMG shader).
+   The overlay itself never steals hits (pointer-events: none). Only
+   #rom-dropzone is interactive — JS pins it to the LEFT half of the LCD
+   so the right half stays free for the in-device menu / GBmul. */
+#rom-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: block;
+  background: transparent;
+  pointer-events: none;
+  cursor: default;
+}
+
+#rom-overlay.hidden {
+  display: none;
+}
+
+/* Menu open: kill dropzone hits entirely (belt + suspenders). */
+body.idm-open #rom-dropzone,
+body.idm-open #rom-dropzone * {
+  pointer-events: none !important;
+  cursor: default;
+}
+
+/* Guest join: hide file picker; status is painted on the LCD (a11y copy here). */
+#rom-overlay.wgl-waiting #btn-browse-rom {
+  display: none;
+}
+#rom-overlay.wgl-waiting {
+  cursor: default;
+}
+#rom-overlay.wgl-waiting #rom-wgl-status {
+  /* Keep in a11y tree; visually off (canvas paints the message). */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+  display: block;
+}
+
+#rom-wgl-status {
+  display: none;
+}
+
+/* Hit rect is set in JS (left half of #screen-wrap). */
+#rom-dropzone {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  max-width: none;
+  text-align: left;
+  pointer-events: auto;
+  cursor: pointer;
+  z-index: 1;
+}
+
+/* drag-over is reflected on the LCD composite, not the DOM chrome */
+#rom-dropzone.drag-over {
+  background: transparent;
+}
+
+/* Browse control fills the dropzone (left half of LCD only). */
+#btn-browse-rom {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: transparent;
+  font-size: 0;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: auto;
+}
+
+#btn-browse-rom:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -4px;
+  opacity: 1;
+  color: var(--text);
+  font-size: 0.9rem;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+}
+
+/* ── ROM manager ─────────────────────────────────────────────────────────── */
+#rom-manager {
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+#rom-manager summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 2px 0;
+  user-select: none;
+  color: var(--text-muted);
+}
+
+#rom-manager summary:hover { color: var(--text); }
+
+#rom-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0;
+}
+
+.rom-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+
+.rom-item-active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface2));
+}
+
+.rom-item-empty {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 0.8rem;
+  padding: 2px 0;
+}
+
+.rom-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+}
+
+.rom-load-btn {
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.rom-delete-btn {
+  padding: 2px 6px;
+  font-size: 0.9rem;
+  line-height: 1;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  background: transparent;
+  border-color: transparent;
+}
+
+.rom-delete-btn:hover {
+  color: #c02020;
+  background: color-mix(in srgb, #c02020 12%, var(--surface2));
+  border-color: #c02020;
+}
+
+#btn-add-rom {
+  width: 100%;
+  font-size: 0.8rem;
+  padding: 5px 10px;
+}
+
+/* ── Touch controls layout panel ─────────────────────────────────────────── */
+#display-settings,
+#tc-layout,
+#misc-settings,
+#bot-settings,
+#keyboard-settings {
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+#display-settings summary,
+#tc-layout summary,
+#misc-settings summary,
+#bot-settings summary,
+#keyboard-settings summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 2px 0;
+  user-select: none;
+  color: var(--text-muted);
+}
+
+#display-settings summary:hover,
+#tc-layout summary:hover,
+#misc-settings summary:hover,
+#bot-settings summary:hover,
+#keyboard-settings summary:hover { color: var(--text); }
+
+/* ── keyboard remapping panel ─────────────────────────────────────────────── */
+#keyboard-settings .kb-hint,
+#keyboard-settings .kb-fixed-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 4px 0 6px;
+  line-height: 1.35;
+  font-weight: normal;
+}
+#keyboard-settings .kb-fixed-hint {
+  margin-top: 8px;
+  opacity: 0.85;
+}
+#kb-map-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+#kb-map-table th,
+#kb-map-table td {
+  text-align: left;
+  padding: 3px 4px;
+  border-bottom: 1px solid var(--border);
+  font-weight: normal;
+}
+#kb-map-table th {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+#kb-map-table .kb-bind-btn {
+  display: block;
+  width: 100%;
+  min-width: 5.5em;
+  padding: 3px 6px;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: normal;
+  text-align: left;
+  background: var(--btn-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+#kb-map-table .kb-bind-btn:hover {
+  background: var(--btn-hover);
+}
+#kb-map-table .kb-bind-btn.listening {
+  outline: 1px solid var(--accent);
+  background: var(--surface2);
+  color: var(--accent);
+}
+#kb-map-table .kb-bind-btn.conflict {
+  border-color: #e05050;
+}
+.kb-reset-btn {
+  margin-top: 8px;
+  width: 100%;
+  font-size: 0.78rem !important;
+  padding: 5px 8px !important;
+}
+
+#misc-settings > label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+#misc-settings > details {
+  margin-bottom: 4px;
+}
+
+#display-settings > label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+#display-settings > label input[type="range"] {
+  flex: 1;
+}
+
+#gray-levels {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+}
+
+#gray-levels label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+#gray-levels label span {
+  min-width: 2.2em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+#gray-levels label input[type="range"] {
+  flex: 1;
+}
+
+#gray-levels-reset {
+  align-self: flex-end;
+  font-size: 0.75rem;
+  padding: 2px 7px;
+  margin-top: 2px;
+  cursor: pointer;
+  border-radius: 4px;
+  border: 1px solid var(--border, #888);
+  background: none;
+  color: var(--text);
+}
+
+.tc-layout-group {
+  margin: 8px 0 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tc-layout-group strong {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+#tc-layout label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+#tc-layout input[type="range"] {
+  flex: 1;
+}
+
+/* ── input mode selector (panel) ─────────────────────────────────────────────── */
+#input-mode-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+#input-mode-select {
+  background: var(--btn-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+/* ── auto-advance menu target pickers ─────────────────────────────────────── */
+#auto-menu-nav-label {
+  flex-wrap: wrap;
+}
+
+#auto-menu-setup-pickers {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--text-muted, var(--text));
+}
+
+#auto-menu-setup-pickers select {
+  background: var(--btn-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  min-width: 2.4em;
+}
+
+#auto-menu-high-select:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── touch controls (smartphone mode) ───────────────────────────────────────── */
+
+/* Extra bottom space so the canvas isn't hidden behind the fixed controls */
+body.touch-mode {
+  padding-bottom: 200px;
+}
+
+#touch-controls {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 200px;
+  z-index: 50;
+  background: none;
+  pointer-events: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body.touch-mode #touch-controls {
+  display: block;
+}
+
+/* ── TC layout ghost (IDM preview, 50 % opacity) ────────────────────────── */
+.tc-ghost {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 200px;
+  z-index: 49;
+  pointer-events: none;
+  touch-action: none;
+  user-select: none;
+  opacity: 0.5;
+}
+.tc-ghost .tc-ghost-dpad {
+  position: absolute;
+  bottom: var(--tc-ghost-dpad-bottom, 20px);
+  left: var(--tc-ghost-dpad-left, 12px);
+  width: calc(var(--tc-ghost-dpad-size, 52px) * 3 + 4px);
+  height: calc(var(--tc-ghost-dpad-size, 52px) * 3 + 4px);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 2px;
+}
+.tc-ghost .tc-ghost-dpad > div {
+  background: rgba(80, 80, 110, 0.45);
+  border: 2px solid rgba(120, 120, 160, 0.55);
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tc-ghost .tc-ghost-dpad-center {
+  background: rgba(80, 80, 110, 0.28);
+  border: 2px solid rgba(120, 120, 160, 0.35);
+}
+.tc-ghost .tc-ghost-ab {
+  position: absolute;
+  bottom: var(--tc-ghost-ab-bottom, 82px);
+  right: var(--tc-ghost-ab-right, 12px);
+  width: var(--tc-ghost-ab-size, 68px);
+  height: var(--tc-ghost-ab-size, 68px);
+}
+.tc-ghost .tc-ghost-ab-a {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--tc-ghost-ab-size, 68px);
+  height: var(--tc-ghost-ab-size, 68px);
+  border-radius: 50%;
+  background: rgba(190, 30, 60, 0.72);
+  border: 2px solid rgba(255, 255, 255, 0.32);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+.tc-ghost .tc-ghost-ab-b {
+  position: absolute;
+  width: var(--tc-ghost-ab-size, 68px);
+  height: var(--tc-ghost-ab-size, 68px);
+  border-radius: 50%;
+  background: rgba(190, 30, 60, 0.72);
+  border: 2px solid rgba(255, 255, 255, 0.32);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.05rem;
+  top: calc(sin(var(--tc-ghost-ab-angle, 29deg)) * (var(--tc-ghost-ab-size, 68px) + var(--tc-ghost-ab-gap, 21px)));
+  left: calc(-1 * cos(var(--tc-ghost-ab-angle, 29deg)) * (var(--tc-ghost-ab-size, 68px) + var(--tc-ghost-ab-gap, 21px)));
+}
+
+/* ── D-pad (single hit-zone — diagonals = Left/Right + Up/Down together) ─── */
+#tc-dpad {
+  position: absolute;
+  bottom: var(--tc-dpad-bottom, 20px);
+  left: var(--tc-dpad-left, 12px);
+  width: calc(var(--tc-dpad-size, 52px) * 3 + 4px);
+  height: calc(var(--tc-dpad-size, 52px) * 3 + 4px);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 2px;
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  /* Full pad is the hit target so corners (diagonals) work like a real cross. */
+}
+
+.tc-dpad-btn {
+  background: rgba(80, 80, 110, 0.45);
+  border: 2px solid rgba(120, 120, 160, 0.55);
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  padding: 0;
+  transition: filter 0.08s;
+  /* Visual only — input is sampled from #tc-dpad geometry (diagonals OK). */
+  pointer-events: none;
+}
+
+.tc-dpad-btn.tc-pressed {
+  filter: brightness(1.4);
+}
+
+#tc-up    { grid-column: 2; grid-row: 1; border-radius: 10px 10px 0 0; }
+#tc-left  { grid-column: 1; grid-row: 2; border-radius: 10px 0 0 10px; }
+#tc-right { grid-column: 3; grid-row: 2; border-radius: 0 10px 10px 0; }
+#tc-down  { grid-column: 2; grid-row: 3; border-radius: 0 0 10px 10px; }
+
+.tc-dpad-center {
+  grid-column: 2;
+  grid-row: 2;
+  background: rgba(80, 80, 110, 0.28);
+  border: 2px solid rgba(120, 120, 160, 0.35);
+  pointer-events: none;
+}
+
+/* ── A / B buttons ────────────────────────────────────────────────────────── */
+#tc-ab {
+  position: absolute;
+  bottom: var(--tc-ab-bottom, 82px);
+  right: var(--tc-ab-right, 12px);
+  width: var(--tc-ab-size, 68px);
+  height: var(--tc-ab-size, 68px);
+  pointer-events: none;
+}
+
+.tc-ab-btn {
+  position: absolute;
+  width: var(--tc-ab-size, 68px);
+  height: var(--tc-ab-size, 68px);
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.32);
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.05rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  padding: 0;
+  transition: filter 0.08s;
+  pointer-events: auto;
+}
+
+.tc-ab-btn:active { filter: none; }
+
+.tc-ab-btn.tc-pressed {
+  filter: brightness(1.4);
+}
+
+#tc-a {
+  top: 0;
+  left: 0;
+  background: rgba(190, 30, 60, 0.72);
+}
+
+#tc-b {
+  top: calc(sin(var(--tc-ab-angle, 29deg)) * (var(--tc-ab-size, 68px) + var(--tc-ab-gap, 21px)));
+  left: calc(-1 * cos(var(--tc-ab-angle, 29deg)) * (var(--tc-ab-size, 68px) + var(--tc-ab-gap, 21px)));
+  background: rgba(190, 30, 60, 0.72);
+}
+
+/* ── Select / Start ───────────────────────────────────────────────────────── */
+/* D-pad right = 12 + 3×44 + 2×2 = 148px → left: 156px (8px gap)           */
+/* A/B  left   = 390 - 12 - (2×48+4) = 278px → right: 112px (8px gap)      */
+#tc-mid {
+  position: absolute;
+  bottom: var(--tc-mid-bottom, 0px);
+  left: var(--tc-mid-left, 156px);
+  right: var(--tc-mid-right, 174px);
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  pointer-events: auto;
+  white-space: nowrap;
+}
+
+.tc-sys-btn {
+  background: rgba(80, 80, 110, 0.45);
+  border: 1.5px solid rgba(120, 120, 160, 0.55);
+  color: rgba(255, 255, 255, 0.95);
+  border-radius: 20px;
+  padding: 7px 6px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  transition: filter 0.08s;
+}
+
+.tc-sys-btn.tc-pressed {
+  filter: brightness(1.4);
+}
+
+/* ── WebGBLink panel ──────────────────────────────────────────────────────── */
+
+#webgblink-panel {
+  margin: 4px 0;
+}
+
+#webgblink-panel summary {
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.85rem;
+  padding: 2px 0;
+}
+
+#wgl-idle,
+#wgl-hosting,
+#wgl-connected {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* display:flex above beats the UA [hidden] rule — keep hidden panels gone. */
+#wgl-idle[hidden],
+#wgl-hosting[hidden],
+#wgl-connected[hidden],
+#wgl-transfer[hidden] {
+  display: none !important;
+}
+
+.wgl-qr-inline {
+  display: none;
+  justify-content: center;
+  margin: 4px 0 2px;
+}
+.wgl-qr-inline.visible {
+  display: flex;
+}
+.wgl-qr-inline canvas,
+.wgl-qr-inline img,
+.wgl-qr-inline table {
+  image-rendering: pixelated;
+  max-width: 140px;
+  max-height: 140px;
+}
+
+/* Full-screen QR / join dialogs (side-by-side share) */
+.wgl-qr-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(10, 12, 24, 0.72);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.wgl-qr-overlay[hidden] {
+  display: none !important;
+}
+.wgl-qr-card {
+  width: min(360px, 100%);
+  background: #f4f4f8;
+  color: #1a1a2e;
+  border-radius: 12px;
+  padding: 18px 16px 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  text-align: center;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+.wgl-qr-title {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.wgl-qr-room {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+.wgl-qr-box {
+  display: flex;
+  justify-content: center;
+  margin: 0 auto 10px;
+  min-height: 180px;
+}
+.wgl-qr-box canvas,
+.wgl-qr-box img,
+.wgl-qr-box table {
+  image-rendering: pixelated;
+  max-width: min(240px, 70vw);
+  max-height: min(240px, 70vw);
+}
+.wgl-qr-url {
+  margin: 0 0 12px;
+  font-size: 0.68rem;
+  word-break: break-all;
+  opacity: 0.65;
+  font-family: ui-monospace, monospace;
+  max-height: 2.6em;
+  overflow: hidden;
+}
+.wgl-qr-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.wgl-qr-actions button {
+  font-size: 0.85rem;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(40, 50, 90, 0.25);
+  background: rgba(100, 120, 200, 0.18);
+  color: #1a1a2e;
+  cursor: pointer;
+}
+.wgl-qr-actions button:hover {
+  background: rgba(100, 120, 200, 0.32);
+}
+.wgl-join-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 8px 0 14px;
+  padding: 10px 12px;
+  font-size: 1.25rem;
+  font-family: ui-monospace, monospace;
+  letter-spacing: 0.18em;
+  text-align: center;
+  text-transform: uppercase;
+  border: 1px solid rgba(40, 50, 90, 0.3);
+  border-radius: 8px;
+  background: #fff;
+  color: #1a1a2e;
+}
+
+#wgl-idle button,
+#wgl-hosting button,
+#wgl-connected button {
+  font-size: 0.78rem;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  background: rgba(100, 120, 200, 0.25);
+  border: 1px solid rgba(120, 140, 220, 0.5);
+  color: inherit;
+  white-space: nowrap;
+}
+
+#wgl-idle button:hover,
+#wgl-hosting button:hover,
+#wgl-connected button:hover {
+  background: rgba(100, 120, 200, 0.45);
+}
+
+.wgl-or {
+  font-size: 0.75rem;
+  opacity: 0.55;
+  text-align: center;
+}
+
+.wgl-join-row {
+  display: flex;
+  gap: 4px;
+}
+
+#wgl-room-input {
+  flex: 1;
+  font-size: 0.8rem;
+  font-family: monospace;
+  text-transform: uppercase;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(120, 140, 220, 0.4);
+  border-radius: 4px;
+  color: inherit;
+  padding: 3px 5px;
+  min-width: 0;
+}
+
+.wgl-room-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+}
+
+.wgl-room-row strong {
+  font-family: monospace;
+  letter-spacing: 0.1em;
+}
+
+.wgl-share-hint {
+  margin: 4px 0 6px;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--text-muted);
+  font-weight: normal;
+}
+.wgl-share-hint code {
+  font-size: 0.7rem;
+  word-break: break-all;
+}
+
+.wgl-status-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+}
+
+.wgl-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.wgl-dot-waiting {
+  background: #f0a020;
+  box-shadow: 0 0 4px #f0a020;
+  animation: wgl-pulse 1.4s ease-in-out infinite;
+}
+
+.wgl-dot-live {
+  background: #40d060;
+  box-shadow: 0 0 5px #40d060;
+}
+
+@keyframes wgl-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+.wgl-ping {
+  margin-left: auto;
+  font-size: 0.72rem;
+  opacity: 0.7;
+  font-family: monospace;
+}
+
+#wgl-net-dot {
+  position: absolute;
+  bottom: 5px;
+  right: 5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  z-index: 3;
+  pointer-events: none;
+  transition: background 0.4s, box-shadow 0.4s;
+}
+#wgl-net-dot.net-green  { background: #40d060; box-shadow: 0 0 5px #40d060; }
+#wgl-net-dot.net-orange { background: #f0a020; box-shadow: 0 0 5px #f0a020; }
+#wgl-net-dot.net-red    { background: #e03030; box-shadow: 0 0 6px #e03030; }
+
+#wgl-transfer {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#wgl-transfer-bar {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+}
+
+#wgl-transfer-label {
+  font-size: 0.75rem;
+  opacity: 0.75;
+}
+
+/* ── in-device menu (SDL-style overlay on the GB screen) ─────────────────────
+   Visuals are painted into the 160×144 frame and fed through the DMG shader.
+   The DOM layer is an invisible hit-target / a11y shell on top of the canvas. */
+#idm {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  overflow: hidden;
+  pointer-events: none; /* closed: let clicks hit the canvas */
+}
+#idm:not([hidden]) {
+  pointer-events: auto;
+}
+
+/* Hide painted chrome — canvas composite is the only visible menu. */
+.idm-dim,
+.idm-panel {
+  opacity: 0;
+}
+
+.idm-dim {
+  position: absolute;
+  inset: 0;
+  background: transparent;
+}
+
+.idm-panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 50%;
+  min-width: 72px;
+  background: transparent;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  font-family: "Cuterminus", ui-monospace, monospace;
+  font-weight: normal;
+}
+#idm,
+#idm * {
+  font-weight: normal !important;
+}
+
+.idm-about {
+  padding: 0 10% 6%;
+  line-height: 1.4;
+}
+.idm-about-line {
+  color: #323232;
+  font-size: clamp(8px, 2.4vw, 14px);
+  letter-spacing: 0.02em;
+}
+.idm-about-line.idm-muted {
+  color: #777777;
+}
+
+.idm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.idm-item {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.4em 6% 0.4em 5%;
+  color: #aaaaaa;
+  /* Prefer integer multiples of the 8px cell when the screen is large enough */
+  font-size: 16px;
+  line-height: 1.15;
+  cursor: pointer;
+  user-select: none;
+  letter-spacing: 0;
+}
+.idm-item.selected {
+  background: #dddddd;
+  color: #323232;
+}
+.idm-item .idm-arrow {
+  color: #777777;
+  width: 0.75em;
+  flex: 0 0 auto;
+}
+.idm-item .idm-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+.idm-item .idm-check {
+  flex: 0 0 auto;
+  width: 0.95em;
+  height: 0.95em;
+  border: 1px solid currentColor;
+  box-sizing: border-box;
+  position: relative;
+  image-rendering: pixelated;
+}
+.idm-item .idm-check.on::before,
+.idm-item .idm-check.on::after {
+  content: "";
+  position: absolute;
+  background: currentColor;
+  width: 1px;
+  height: 90%;
+  top: 5%;
+  left: 50%;
+}
+.idm-item .idm-check.on::before {
+  transform: translateX(-50%) rotate(45deg);
+}
+.idm-item .idm-check.on::after {
+  transform: translateX(-50%) rotate(-45deg);
+}
+.idm-item .idm-swatch {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 1px;
+  height: 0.85em;
+}
+.idm-item .idm-swatch i {
+  display: block;
+  width: 0.55em;
+  height: 100%;
+  background: #ccc;
+}
+
+/* Menu is inside the shaded frame — keep the usual LCD bezel. */
+

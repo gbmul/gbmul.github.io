@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GBmul – Game Stats</title>
+  <style>
+    /* ── theme variables (matches main page) ───────────────────────────────── */
+    :root {
+      --bg:         #f4f4f8;
+      --surface:    #ffffff;
+      --surface2:   #e8e8f0;
+      --border:     #c8c8d8;
+      --text:       #1a1a2e;
+      --text-muted: #606080;
+      --accent:     #2a7a2a;
+      --btn-bg:     #e0e0ec;
+      --btn-hover:  #cacadc;
+      --danger:     #c03030;
+      --danger-h:   #a02020;
+    }
+    [data-theme="dark"] {
+      --bg:         #1a1a2e;
+      --surface:    #2a2a4e;
+      --surface2:   #22223c;
+      --border:     #4a4a6a;
+      --text:       #e0e0e0;
+      --text-muted: #9a9ab0;
+      --accent:     #9eff9e;
+      --btn-bg:     #2a2a4e;
+      --btn-hover:  #3a3a6e;
+      --danger:     #a02030;
+      --danger-h:   #802020;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body { height: 100%; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* ── header ─────────────────────────────────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 10px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+    header h1 {
+      font-size: 1.05rem;
+      flex: 1;
+      min-width: 120px;
+    }
+
+    /* ── shared button style ────────────────────────────────────────────────── */
+    .btn {
+      padding: 5px 12px;
+      background: var(--btn-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    .btn:hover  { background: var(--btn-hover); }
+    .btn-danger {
+      background: var(--danger);
+      color: #fff;
+      border-color: var(--danger-h);
+    }
+    .btn-danger:hover { background: var(--danger-h); }
+
+    /* ── main content area ──────────────────────────────────────────────────── */
+    #content {
+      flex: 1;
+      overflow: auto;
+      padding: 12px 16px 24px;
+    }
+
+    /* ── filter hint ────────────────────────────────────────────────────────── */
+    #filter-hint {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    /* ── empty state ────────────────────────────────────────────────────────── */
+    #empty-msg {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-muted);
+      font-size: 1rem;
+    }
+
+    /* ── table wrapper (horizontal scroll) ──────────────────────────────────── */
+    #table-wrap { overflow-x: auto; }
+
+    /* ── stats table ─────────────────────────────────────────────────────────── */
+    #stats-table {
+      border-collapse: collapse;
+      font-size: 0.82rem;
+      min-width: 960px;
+      width: 100%;
+    }
+
+    #stats-table th,
+    #stats-table td {
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    /* ── sticky header ──────────────────────────────────────────────────────── */
+    /* The two header rows stick to the top of #content when scrolling vertically */
+    #stats-table thead th {
+      background: var(--surface);
+      position: sticky;
+      z-index: 5;
+    }
+    /* row 1: column labels */
+    #header-row th { top: 0; }
+    /* row 2: filter inputs — offset below row 1 (set dynamically in JS) */
+    #filter-row th {
+      background: var(--surface2);
+      top: var(--hdr-row-h, 30px);
+    }
+
+    /* ── sortable column indicator ──────────────────────────────────────────── */
+    th.sortable {
+      cursor: pointer;
+      user-select: none;
+    }
+    th.sortable:hover { background: var(--surface2) !important; }
+    th.sort-asc  span.sort-arrow::after { content: ' ▲'; font-size: 0.68em; opacity: 0.8; }
+    th.sort-desc span.sort-arrow::after { content: ' ▼'; font-size: 0.68em; opacity: 0.8; }
+
+    /* ── filter inputs ──────────────────────────────────────────────────────── */
+    #filter-row input {
+      width: 100%;
+      min-width: 50px;
+      padding: 2px 4px;
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      font-size: 0.78rem;
+      font-family: inherit;
+    }
+    #filter-row input::placeholder { color: var(--text-muted); }
+
+    /* ── data rows ──────────────────────────────────────────────────────────── */
+    #stats-body tr:nth-child(even) { background: var(--surface2); }
+    #stats-body tr:hover { background: var(--btn-hover); }
+
+    td.num { text-align: right; }
+    td.outcome-win { color: var(--accent); font-weight: 600; }
+    td.outcome-misdrop { color: #e65100; font-weight: 600; }
+
+    /* ── row number column ──────────────────────────────────────────────────── */
+    .col-rownum { text-align: center; color: var(--text-muted); min-width: 36px; }
+
+    /* ── delete button ──────────────────────────────────────────────────────── */
+    .delete-btn {
+      padding: 1px 6px;
+      background: var(--danger);
+      color: #fff;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 0.78rem;
+      line-height: 1.4;
+    }
+    .delete-btn:hover { background: var(--danger-h); }
+
+    /* ── summary line ────────────────────────────────────────────────────────── */
+    #stats-summary {
+      margin-top: 10px;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+
+    /* ── player stats tooltip ───────────────────────────────────────────────── */
+    #player-tip {
+      position: fixed;
+      z-index: 100;
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.18);
+      padding: 8px 12px;
+      font-size: 0.78rem;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    #player-tip .tip-title {
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+    #player-tip table { border-collapse: collapse; }
+    #player-tip th {
+      color: var(--text-muted);
+      font-weight: normal;
+      text-align: right;
+      padding: 1px 6px;
+      font-size: 0.72rem;
+    }
+    #player-tip td {
+      text-align: right;
+      padding: 1px 6px;
+      color: var(--text);
+    }
+    #player-tip td.tip-label {
+      text-align: left;
+      color: var(--text-muted);
+      padding-right: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <a href="index.html" class="btn">← Back</a>
+    <h1>📊 Game Stats</h1>
+    <button id="btn-export" class="btn" title="Export visible rows as CSV">⬇ Export CSV</button>
+    <button id="btn-clear"  class="btn btn-danger" title="Delete all records">🗑 Clear All</button>
+  </header>
+
+  <div id="player-tip">
+    <div class="tip-title"></div>
+    <table>
+      <thead><tr><th></th><th>avg</th><th>med</th><th>stdev</th><th>min</th><th>max</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div id="content">
+    <p id="filter-hint">
+      Text columns: substring match. &nbsp;
+      Numeric columns: exact value, &nbsp;<code>&gt;5</code>&nbsp;/&nbsp;<code>&lt;=10</code>&nbsp;/&nbsp;<code>5-20</code>&nbsp; range.
+    </p>
+
+    <div id="empty-msg" hidden>No games recorded yet. Play a game first!</div>
+
+    <div id="table-wrap">
+      <table id="stats-table" hidden>
+        <thead>
+          <tr id="header-row"><th class="col-rownum">#</th></tr>
+          <tr id="filter-row"><th></th></tr>
+        </thead>
+        <tbody id="stats-body"></tbody>
+      </table>
+    </div>
+
+    <p id="stats-summary"></p>
+  </div>
+
+  <script>
+    // ── constants ─────────────────────────────────────────────────────────────
+    const STATS_KEY = 'gbmul_game_stats';
+
+    // Column definitions  ─  key, label, type ('text' | 'number' | 'date')
+    const COLS = [
+      { key: 'dateStart',       label: 'Date/Start',  type: 'date'   },
+      { key: 'durationSec',     label: 'Duration',    type: 'number' },
+      { key: 'player',          label: 'Player',      type: 'text'   },
+      { key: 'gameType',        label: 'Type',        type: 'text'   },
+      { key: 'startHeight',     label: 'S.Height',    type: 'number' },
+      { key: 'pps',             label: 'PPS / ePPS',  type: 'number' },
+      { key: 'score',           label: 'Score',       type: 'number' },
+      { key: 'level',           label: 'Level',       type: 'text'   },
+      { key: 'lines',           label: 'Lines',       type: 'number' },
+      { key: 'piecesLocked',    label: 'Pieces',      type: 'number' },
+      { key: 'lineClearBreakdown', label: '1L/2L/3L/4L', type: 'text'   },
+      { key: 'attacks',         label: 'Attacks',     type: 'number' },
+      { key: 'avgAttackPerMin', label: 'APM',         type: 'number' },
+      { key: 'outcome',         label: 'Outcome',     type: 'text'   },
+    ];
+
+    // ── state ─────────────────────────────────────────────────────────────────
+    let records  = [];   // all records loaded from localStorage
+    let sortKey  = 'dateStart';
+    let sortDir  = -1;   // -1 = descending, +1 = ascending
+    const filters = {};  // key → filter string
+
+    // ── persistence ───────────────────────────────────────────────────────────
+    function loadRecords() {
+      try { records = JSON.parse(localStorage.getItem(STATS_KEY) || '[]'); }
+      catch { records = []; }
+    }
+    function saveRecords() {
+      localStorage.setItem(STATS_KEY, JSON.stringify(records));
+    }
+
+    // ── formatting helpers ────────────────────────────────────────────────────
+    function fmtDate(iso) {
+      const d = new Date(iso);
+      const date = d.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' });
+      // Include seconds and milliseconds → hundredths of seconds
+      const h   = String(d.getHours()).padStart(2, '0');
+      const min = String(d.getMinutes()).padStart(2, '0');
+      const s   = String(d.getSeconds()).padStart(2, '0');
+      const cs  = String(Math.floor(d.getMilliseconds() / 10)).padStart(2, '0');
+      return `${date} ${h}:${min}:${s}.${cs}`;
+    }
+
+    function fmtDuration(sec) {
+      if (sec === null || sec === undefined) return '—';
+      // Legacy records may store durationMs — convert if value looks like ms (> 1 000 000)
+      if (sec > 1_000_000) sec = sec / 1000;
+      const totalCs  = Math.round(sec * 100);
+      const m        = Math.floor(totalCs / 6000);
+      const remCs    = totalCs % 6000;
+      const s        = Math.floor(remCs / 100);
+      const cs       = remCs % 100;
+      return `${m}:${String(s).padStart(2,'0')}.${String(cs).padStart(2,'0')}`;
+    }
+
+    function fmtPps(pps) {
+      if (pps === null || pps === undefined) return '—';
+      if (pps === -1) return '∞';
+      return Number(pps).toFixed(1);
+    }
+
+    function calcEPPS(rec) {
+      const pieces = rec.piecesLocked;
+      if (pieces == null) return null;
+      const dur = rec.durationSec ?? rec.durationMs;
+      const durSec = dur > 1_000_000 ? dur / 1000 : (dur ?? 0);
+      if (durSec <= 0) return null;
+      return pieces / durSec;
+    }
+
+    function attacksTooltip(rec) {
+      const d = rec.doubles ?? 0, t = rec.triples ?? 0, q = rec.quads ?? 0;
+      if (d === 0 && t === 0 && q === 0) return null;
+      const parts = [];
+      if (d) parts.push(`${d}×1`);
+      if (t) parts.push(`${t}×2`);
+      if (q) parts.push(`${q}×4`);
+      const expanded = [];
+      if (d) expanded.push(`${d}`);
+      if (t) expanded.push(`${t * 2}`);
+      if (q) expanded.push(`${q * 4}`);
+      return `${parts.join(' + ')} = ${expanded.join(' + ')} = ${d + t * 2 + q * 4}`;
+    }
+
+    function fmtPlayer(rec) {
+      if (rec.botType) return 'bot-' + rec.botType;
+      return 'human';
+    }
+
+    function fmtOutcome(o) {
+      if (o === 'win') return 'Win ✓';
+      if (o === 'game-over') return 'Game Over';
+      if (o === 'misdrop-abort') return 'Aborted by misdrop';
+      return o ?? '—';
+    }
+
+    /** Returns the display string for a column cell. */
+    function cellDisplay(rec, col) {
+      switch (col.key) {
+        case 'dateStart':       return fmtDate(rec.dateStart);
+        case 'durationSec':     return fmtDuration(rec.durationSec ?? rec.durationMs);
+        case 'pps': {
+          const e = calcEPPS(rec);
+          return fmtPps(rec.pps) + ' / ' + (e != null ? e.toFixed(2) : '—');
+        }
+        case 'player':          return fmtPlayer(rec);
+        case 'gameType':        return rec.gameType ?? '—';
+        case 'level':           return `${rec.startLevel ?? '—'}→${rec.finalLevel ?? '—'}`;
+        case 'score':           return rec.score != null ? rec.score.toLocaleString() : '—';
+        case 'startHeight':     return rec.startHeight !== null && rec.startHeight !== undefined
+                                  ? String(rec.startHeight) : '—';
+        case 'outcome':         return fmtOutcome(rec.outcome);
+        case 'avgAttackPerMin': return Number(rec.avgAttackPerMin ?? 0).toFixed(2);
+        case 'lineClearBreakdown': {
+          const s = rec.singles, d = rec.doubles, t = rec.triples, q = rec.quads;
+          if (s === undefined && d === undefined && t === undefined && q === undefined) return '—';
+          return `${s ?? 0}/${d ?? 0}/${t ?? 0}/${q ?? 0}`;
+        }
+        default:                return rec[col.key] ?? '—';
+      }
+    }
+
+    // ── sort / filter helpers ─────────────────────────────────────────────────
+
+    /** Returns a comparable sort value for a column. */
+    function sortVal(rec, key) {
+      switch (key) {
+        case 'dateStart':   return new Date(rec.dateStart).getTime();
+        case 'durationSec': {
+          const v = rec.durationSec ?? rec.durationMs;
+          return v > 1_000_000 ? v / 1000 : (v ?? 0);
+        }
+        case 'pps':         { const v = calcEPPS(rec); return v ?? (rec.pps === null ? -Infinity : (rec.pps ?? 0)); }
+        case 'player':      return fmtPlayer(rec).toLowerCase();
+        case 'level':       return rec.startLevel ?? -1;
+        case 'startHeight': return rec.startHeight ?? -1;
+        default:            return rec[key] ?? 0;
+      }
+    }
+
+    /**
+     * Returns the raw (comparable/filterable) value for a column.
+     * Numbers stay numbers; text is lowercased string.
+     */
+    function filterVal(rec, col) {
+      switch (col.key) {
+        case 'dateStart':   return fmtDate(rec.dateStart).toLowerCase();
+        case 'durationSec': {
+          const v = rec.durationSec ?? rec.durationMs;
+          return v > 1_000_000 ? v / 1000 : (v ?? 0);
+        }
+        case 'pps':         { const v = calcEPPS(rec); return v ?? ((rec.pps === null) ? NaN : rec.pps); }
+        case 'player':      return fmtPlayer(rec).toLowerCase();
+        case 'level':       return String(rec.startLevel ?? '').toLowerCase();
+        case 'gameType':    return (rec.gameType || '').toLowerCase();
+        case 'startHeight': return rec.startHeight ?? NaN;
+        case 'outcome':     return fmtOutcome(rec.outcome).toLowerCase();
+        case 'avgAttackPerMin': return rec.avgAttackPerMin ?? 0;
+        case 'lineClearBreakdown': return cellDisplay(rec, col).toLowerCase();
+        default:
+          if (col.type === 'number') return Number(rec[col.key] ?? 0);
+          return String(rec[col.key] ?? '').toLowerCase();
+      }
+    }
+
+    /**
+     * Tests whether a cell value passes the filter string.
+     *  - numeric cols: supports ">5", ">=5", "<5", "<=5", "5-20", exact number
+     *  - text cols: case-insensitive substring
+     */
+    function passesFilter(rawVal, filterStr, isNumeric) {
+      const f = filterStr.trim();
+      if (!f) return true;
+
+      if (isNumeric) {
+        const n = Number(rawVal);
+        if (isNaN(n)) return false;           // NaN cells never match numeric filters
+
+        // Range: "5-20" or "5 - 20"
+        const rangeM = f.match(/^(-?\d*\.?\d*)\s*-\s*(-?\d*\.?\d*)$/);
+        if (rangeM) {
+          const lo = parseFloat(rangeM[1]);
+          const hi = parseFloat(rangeM[2]);
+          if (!isNaN(lo) && n < lo) return false;
+          if (!isNaN(hi) && n > hi) return false;
+          return true;
+        }
+        // Comparison operators
+        const opM = f.match(/^(>=|<=|>|<)\s*(-?\d*\.?\d*)$/);
+        if (opM) {
+          const v = parseFloat(opM[2]);
+          switch (opM[1]) {
+            case '>=': return n >= v;
+            case '<=': return n <= v;
+            case '>':  return n >  v;
+            case '<':  return n <  v;
+          }
+        }
+        // Exact match
+        return n === parseFloat(f);
+      }
+
+      // Text: substring match
+      return String(rawVal).includes(f.toLowerCase());
+    }
+
+    /** Returns filtered and sorted records. */
+    function applyFiltersAndSort() {
+      return records
+        .filter(rec => COLS.every(col => {
+          const fStr = filters[col.key] || '';
+          if (!fStr) return true;
+          return passesFilter(filterVal(rec, col), fStr, col.type === 'number');
+        }))
+        .sort((a, b) => {
+          const av = sortVal(a, sortKey);
+          const bv = sortVal(b, sortKey);
+          if (av < bv) return -sortDir;
+          if (av > bv) return  sortDir;
+          return 0;
+        });
+    }
+
+    // ── per-player statistics ────────────────────────────────────────────────
+    function statValues(arr) {
+      // coerce to numbers and drop any NaN
+      const nums = arr.map(Number).filter(v => !isNaN(v));
+      if (nums.length === 0) return null;
+      const sorted = nums.slice().sort((a, b) => a - b);
+      const n = sorted.length;
+      const avg = sorted.reduce((s, v) => s + v, 0) / n;
+      const stdev = Math.sqrt(sorted.reduce((s, v) => s + (v - avg) ** 2, 0) / n);
+      const median = n % 2 === 0
+        ? (sorted[n / 2 - 1] + sorted[n / 2]) / 2
+        : sorted[Math.floor(n / 2)];
+      return { n, avg, median, stdev, min: sorted[0], max: sorted[n - 1] };
+    }
+
+    function computePlayerStats() {
+      const map = {};
+      for (const rec of records) {
+        const p = fmtPlayer(rec);
+        if (!map[p]) map[p] = { scores: [], lines: [], apms: [] };
+        if (rec.score    != null) map[p].scores.push(rec.score);
+        if (rec.lines    != null) map[p].lines.push(rec.lines);
+        if (rec.avgAttackPerMin != null) map[p].apms.push(rec.avgAttackPerMin);
+      }
+      const result = {};
+      for (const [p, data] of Object.entries(map)) {
+        result[p] = {
+          score: statValues(data.scores),
+          lines: statValues(data.lines),
+          apm:   statValues(data.apms),
+        };
+      }
+      return result;
+    }
+
+    // ── custom player tooltip ──────────────────────────────────────────────────
+    const playerTip = document.getElementById('player-tip');
+
+    function showPlayerTip(td, playerName, s) {
+      if (!s) return;
+      const f0 = v => Math.round(v).toLocaleString();
+      playerTip.querySelector('.tip-title').textContent = playerName;
+      const tbody = playerTip.querySelector('tbody');
+      tbody.innerHTML = '';
+      const rows = [
+        ['Score', s.score],
+        ['Lines', s.lines],
+        ['APM',   s.apm],
+      ];
+      for (const [label, st] of rows) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = st
+          ? `<td class="tip-label">${label}</td><td>${f0(st.avg)}</td><td>${f0(st.median)}</td><td>${f0(st.stdev)}</td><td>${f0(st.min)}</td><td>${f0(st.max)}</td>`
+          : `<td class="tip-label">${label}</td><td colspan="5" style="text-align:center;color:var(--text-muted)">—</td>`;
+        tbody.appendChild(tr);
+      }
+      // n from any available stat
+      const anyS = s.score || s.lines || s.apm;
+      if (anyS) {
+        const nTr = document.createElement('tr');
+        nTr.innerHTML = `<td class="tip-label" style="padding-top:4px;color:var(--text-muted);font-size:0.70rem" colspan="6">n = ${anyS.n} games</td>`;
+        tbody.appendChild(nTr);
+      }
+      playerTip.style.display = 'block';
+      moveTip(td);
+    }
+
+    function moveTip(td) {
+      const rect = td.getBoundingClientRect();
+      const tipW = playerTip.offsetWidth || 260;
+      const tipH = playerTip.offsetHeight || 100;
+      let left = rect.right + 6;
+      let top  = rect.top;
+      if (left + tipW > window.innerWidth - 8)  left = rect.left - tipW - 6;
+      if (top  + tipH > window.innerHeight - 8) top  = window.innerHeight - tipH - 8;
+      playerTip.style.left = left + 'px';
+      playerTip.style.top  = top  + 'px';
+    }
+
+    function hidePlayerTip() { playerTip.style.display = 'none'; }
+
+    // ── rendering ─────────────────────────────────────────────────────────────
+    function render() {
+      const visible   = applyFiltersAndSort();
+      const tbody     = document.getElementById('stats-body');
+      const emptyMsg  = document.getElementById('empty-msg');
+      const table     = document.getElementById('stats-table');
+      const summary   = document.getElementById('stats-summary');
+
+      if (records.length === 0) {
+        emptyMsg.hidden = false;
+        table.hidden    = true;
+        summary.textContent = '';
+        return;
+      }
+      emptyMsg.hidden = true;
+      table.hidden    = false;
+
+      tbody.innerHTML = '';
+      const playerStats = computePlayerStats();
+      visible.forEach(rec => {
+        const origIdx = records.indexOf(rec); // stable row number (1-based)
+        const tr = document.createElement('tr');
+
+        // Row number
+        const tdNum = document.createElement('td');
+        tdNum.textContent = origIdx + 1;
+        tdNum.className = 'col-rownum';
+        tr.appendChild(tdNum);
+
+        // Data cells
+        COLS.forEach(col => {
+          const td = document.createElement('td');
+          td.textContent = cellDisplay(rec, col);
+          if (col.type === 'number') td.className = 'num';
+          if (col.key === 'outcome') {
+            if (rec.outcome === 'win') td.className = 'outcome-win';
+            else if (rec.outcome === 'misdrop-abort') td.className = 'outcome-misdrop';
+          }
+          if (col.key === 'player') {
+            const pName = fmtPlayer(rec);
+            const ps = playerStats[pName];
+            if (ps) {
+              td.style.cursor = 'help';
+              td.addEventListener('mouseenter', () => showPlayerTip(td, pName, ps));
+              td.addEventListener('mouseleave', hidePlayerTip);
+            }
+          }
+          if (col.key === 'attacks') {
+            const tip = attacksTooltip(rec);
+            if (tip) { td.title = tip; td.style.cursor = 'help'; }
+          }
+          if (col.key === 'level') {
+            const s = rec.startLevel ?? '—', f = rec.finalLevel ?? '—';
+            td.title = `Start: ${s} / Final: ${f}`;
+            td.style.cursor = 'help';
+          }
+          if (col.key === 'lineClearBreakdown') {
+            const s = rec.singles ?? 0, d = rec.doubles ?? 0, t = rec.triples ?? 0, q = rec.quads ?? 0;
+            if (s || d || t || q) {
+              td.title = `${s} single${s >= 2 ? 's' : ''} / ${d} double${d >= 2 ? 's' : ''} / ${t} triple${t >= 2 ? 's' : ''} / ${q} quad${q >= 2 ? 's' : ''}`;
+              td.style.cursor = 'help';
+            }
+          }
+          if (col.key === 'pps') {
+            const e = calcEPPS(rec);
+            const ppsLabel = rec.pps === -1 ? '∞' : rec.pps != null ? Number(rec.pps).toFixed(1) : '—';
+            const pieces = rec.piecesLocked;
+            const dur = rec.durationSec ?? rec.durationMs;
+            const durSec = dur > 1_000_000 ? dur / 1000 : (dur ?? 0);
+            const ePPSLabel = e != null ? e.toFixed(3) : '—';
+            td.title = `PPS setting: ${ppsLabel}\nEffective PPS: ${pieces ?? '?'} pieces ÷ ${durSec.toFixed(2)}s = ${ePPSLabel}`;
+            td.style.cursor = 'help';
+          }
+          if (col.key === 'avgAttackPerMin') {
+            const atk = rec.attacks ?? 0;
+            const dur = rec.durationSec ?? rec.durationMs;
+            const durSec = dur > 1_000_000 ? dur / 1000 : (dur ?? 0);
+            if (durSec > 0) {
+              td.title = `${atk} attacks ÷ ${durSec.toFixed(2)}s × 60 = ${Number(rec.avgAttackPerMin).toFixed(2)} APM`;
+              td.style.cursor = 'help';
+            }
+          }
+          tr.appendChild(td);
+        });
+
+        // Delete button
+        const tdDel = document.createElement('td');
+        const delBtn = document.createElement('button');
+        delBtn.className = 'delete-btn';
+        delBtn.textContent = '✕';
+        delBtn.title = 'Delete this record';
+        delBtn.addEventListener('click', () => {
+          records.splice(origIdx, 1);
+          saveRecords();
+          render();
+        });
+        tdDel.appendChild(delBtn);
+        tr.appendChild(tdDel);
+
+        tbody.appendChild(tr);
+      });
+
+      const total = records.length;
+      const shown = visible.length;
+      summary.textContent = shown === total
+        ? `${total} record${total !== 1 ? 's' : ''}`
+        : `Showing ${shown} of ${total} records`;
+    }
+
+    // ── header / filter row construction ─────────────────────────────────────
+    function buildHeaderAndFilters() {
+      const headerRow = document.getElementById('header-row');
+      const filterRow = document.getElementById('filter-row');
+
+      COLS.forEach(col => {
+        // Sortable column header
+        const th = document.createElement('th');
+        th.className = 'sortable';
+        th.dataset.key = col.key;
+        if (col.key === 'avgAttackPerMin') th.title = 'Attacks Per Minute';
+        if (col.key === 'pps') th.title = 'PPS setting / Effective PPS (pieces ÷ duration)';
+        const labelSpan = document.createElement('span');
+        labelSpan.textContent = col.label;
+        const arrowSpan = document.createElement('span');
+        arrowSpan.className = 'sort-arrow';
+        th.appendChild(labelSpan);
+        th.appendChild(arrowSpan);
+        if (col.key === sortKey) {
+          th.classList.add(sortDir > 0 ? 'sort-asc' : 'sort-desc');
+        }
+        th.addEventListener('click', () => {
+          if (sortKey === col.key) {
+            sortDir = -sortDir;
+          } else {
+            sortKey = col.key;
+            sortDir = -1; // default: newest/highest first
+          }
+          // Update sort indicators on all header cells
+          document.querySelectorAll('#header-row th.sortable').forEach(t => {
+            t.classList.remove('sort-asc', 'sort-desc');
+          });
+          th.classList.add(sortDir > 0 ? 'sort-asc' : 'sort-desc');
+          render();
+        });
+        headerRow.appendChild(th);
+
+        // Filter input cell
+        const fth = document.createElement('th');
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.placeholder = col.type === 'number' ? '>0  5-20' : '…';
+        inp.title = col.type === 'number'
+          ? 'Numeric filter: exact, >5, <=10, 5-20'
+          : 'Text filter: substring match';
+        inp.addEventListener('input', () => {
+          filters[col.key] = inp.value;
+          render();
+        });
+        fth.appendChild(inp);
+        filterRow.appendChild(fth);
+      });
+
+      // Delete column header (non-sortable)
+      const thDel = document.createElement('th');
+      thDel.textContent = '';
+      headerRow.appendChild(thDel);
+      filterRow.appendChild(document.createElement('th'));
+
+      // Now that both rows are in the DOM, compute the height of the first row
+      // and set --hdr-row-h so the filter row sticks below it.
+      requestAnimationFrame(() => {
+        const h = document.getElementById('header-row').getBoundingClientRect().height;
+        document.documentElement.style.setProperty('--hdr-row-h', Math.round(h) + 'px');
+      });
+    }
+
+    // ── CSV export ────────────────────────────────────────────────────────────
+    document.getElementById('btn-export').addEventListener('click', () => {
+      const visible = applyFiltersAndSort();
+      const headers = ['#', ...COLS.map(c => c.label), 'outcome_raw'].join(',');
+      const rows = visible.map(rec => {
+        const origIdx = records.indexOf(rec);
+        const vals = [
+          origIdx + 1,
+          ...COLS.map(col => {
+            const v = String(cellDisplay(rec, col));
+            // RFC 4180: wrap in double-quotes if value contains comma, newline or double-quote
+            return (v.includes(',') || v.includes('"') || v.includes('\n'))
+              ? '"' + v.replace(/"/g, '""') + '"'
+              : v;
+          }),
+          rec.outcome,
+        ];
+        return vals.join(',');
+      });
+      const csv = [headers, ...rows].join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = 'gbmul-stats.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+
+    // ── clear all ─────────────────────────────────────────────────────────────
+    document.getElementById('btn-clear').addEventListener('click', () => {
+      if (!confirm('Delete ALL game records? This cannot be undone.')) return;
+      records = [];
+      saveRecords();
+      render();
+    });
+
+    // ── theme (inherit setting from main page via localStorage) ───────────────
+    (function applyTheme() {
+      const pref = localStorage.getItem('gbmul_theme') || 'auto';
+      const html = document.documentElement;
+      if (pref === 'auto') {
+        const dark = window.matchMedia('(prefers-color-scheme: dark)');
+        html.dataset.theme = dark.matches ? 'dark' : 'light';
+        dark.addEventListener('change', e => {
+          if ((localStorage.getItem('gbmul_theme') || 'auto') === 'auto')
+            html.dataset.theme = e.matches ? 'dark' : 'light';
+        });
+      } else {
+        html.dataset.theme = pref;
+      }
+    })();
+
+    // ── init ──────────────────────────────────────────────────────────────────
+    loadRecords();
+    buildHeaderAndFilters();
+    render();
+
+    // ── auto-refresh every 60 seconds ─────────────────────────────────────────
+    setInterval(() => {
+      loadRecords();
+      render();
+    }, 60_000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "gbmul-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node copy-wasm.js",
+    "start": "npx serve ."
+  },
+  "dependencies": {
+    "@gbmul/gbmul-wasm": "^0.1.0"
+  }
+}

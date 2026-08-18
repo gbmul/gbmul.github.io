@@ -1,0 +1,40 @@
+name: Deploy to Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download WASM from latest release
+        run: |
+          mkdir -p pkg
+          gh release download wasm-pkg \
+            --repo gbmul/gbmul-core \
+            --dir /tmp/wasm
+          tar xzf /tmp/wasm/wasm-package.tar.gz -C pkg/
+          ls -la pkg/
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+          overwrite: true
+
+      - name: Deploy to Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
