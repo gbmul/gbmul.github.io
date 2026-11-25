@@ -1,0 +1,3 @@
+# WASM bundle: fetched from the gbmul-core "wasm-pkg" release by
+# .github/workflows/deploy.yml at deploy time, never committed.
+pkg/
