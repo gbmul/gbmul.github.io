@@ -5,19 +5,20 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Upload and deploy run in separate jobs on purpose: deploy-pages looks the
+# artifact up by name, and that lookup can return nothing when it happens a few
+# hundred ms after upload-pages-artifact in the same job
+# (https://github.com/actions/deploy-pages/issues/451). The job boundary gives
+# the artifact index time to catch up.
+permissions:
+  contents: read
+
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Download WASM from latest release
         run: |
@@ -30,11 +31,21 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: .
-          overwrite: true
 
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
       - name: Deploy to Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
